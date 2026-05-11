@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
-const modelsToTry = ['gemini-2.5-flash']
+const MODEL = 'gemini-2.5-flash'
 
 const SYSTEM_PROMPT = `Eres un experto en contabilidad española. Analiza esta imagen de ticket o factura y extrae los datos.
 
@@ -43,77 +43,54 @@ export async function POST(request: NextRequest) {
 
     if (!file) return NextResponse.json({ error: 'No se recibió archivo' }, { status: 400 })
 
-    const maxSize = 10 * 1024 * 1024 // 10MB
-    if (file.size > maxSize) {
+    if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json({ error: 'El archivo no puede superar 10MB' }, { status: 400 })
     }
 
-    // Convertir a base64
     const arrayBuffer = await file.arrayBuffer()
     const base64 = Buffer.from(arrayBuffer).toString('base64')
-
-    // Determinar tipo MIME
     const mimeType = file.type || 'image/jpeg'
-    const isImage = mimeType.startsWith('image/')
-    const isPDF   = mimeType === 'application/pdf'
 
-    if (!isImage && !isPDF) {
+    if (!mimeType.startsWith('image/') && mimeType !== 'application/pdf') {
       return NextResponse.json({ error: 'Solo se aceptan imágenes y PDFs' }, { status: 400 })
     }
 
-    // Construir el mensaje para Gemini Vision
     const requestBody = {
       contents: [
         {
           role: 'user',
           parts: [
-            {
-              inline_data: {
-                mime_type: mimeType,
-                data: base64,
-              },
-            },
-            {
-              text: SYSTEM_PROMPT,
-            },
+            { inline_data: { mime_type: mimeType, data: base64 } },
+            { text: SYSTEM_PROMPT },
           ],
         },
       ],
       generationConfig: {
-        temperature: 0.1, // baja temperatura para más precisión
+        temperature: 0.1,
         maxOutputTokens: 1024,
+        thinkingConfig: { thinkingBudget: 0 },
       },
     }
 
-    // Intentar con gemini-2.0-flash-exp que soporta visión mejor
-    const modelsToTry = ['gemini-2.0-flash', 'gemma-3-27b-it']
-    let rawText = ''
-    let lastError = ''
-
-    for (const model of modelsToTry) {
-      const response = await fetch(
-        `${GEMINI_API_URL}/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-        }
-      )
-
-      if (response.ok) {
-        const data = await response.json()
-        rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
-        if (rawText) break
-      } else {
-        lastError = await response.text()
+    const response = await fetch(
+      `${GEMINI_API_URL}/${MODEL}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
       }
+    )
+
+    if (!response.ok) {
+      const errText = await response.text()
+      throw new Error(`Error IA: ${errText}`)
     }
 
-    if (!rawText) {
-      throw new Error(`Error en la IA: ${lastError}`)
-    }
+    const data = await response.json()
+    let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
 
-    // Limpiar y parsear JSON
+    if (!rawText) throw new Error('La IA no devolvió contenido')
+
     let cleaned = rawText.trim()
     cleaned = cleaned.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim()
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
@@ -121,14 +98,13 @@ export async function POST(request: NextRequest) {
 
     const parsed = JSON.parse(cleaned)
 
-    // Validar y normalizar
     const today = new Date().toISOString().split('T')[0]
-    const amount   = parseFloat(parsed.amount) || 0
-    const taxRate  = parseFloat(parsed.tax_rate) ?? 21
+    const amount    = parseFloat(parsed.amount) || 0
+    const taxRate   = parseFloat(parsed.tax_rate) ?? 21
     const taxAmount = parseFloat(parsed.tax_amount) || amount * (taxRate / 100)
-    const total    = parseFloat(parsed.total) || amount + taxAmount
+    const total     = parseFloat(parsed.total) || amount + taxAmount
 
-    const result = {
+    return NextResponse.json({
       description:  parsed.description || 'Gasto escaneado',
       provider:     parsed.provider || null,
       date:         parsed.date || today,
@@ -139,13 +115,13 @@ export async function POST(request: NextRequest) {
       category:     parsed.category || 'otros',
       invoice_ref:  parsed.invoice_ref || null,
       confidence:   parsed.confidence || 'media',
-    }
-
-    return NextResponse.json(result)
+    })
 
   } catch (err) {
     console.error('Error escaneando ticket:', err)
-    const message = err instanceof Error ? err.message : 'Error desconocido'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Error desconocido' },
+      { status: 500 }
+    )
   }
 }
