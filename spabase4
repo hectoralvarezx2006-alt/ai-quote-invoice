@@ -1,0 +1,57 @@
+-- ============================================================
+-- UPDATE 4: IRPF, IVA por línea, catálogo de productos, series
+-- ============================================================
+
+-- ── 1. IRPF en quotes ────────────────────────────────────────
+ALTER TABLE public.quotes
+  ADD COLUMN IF NOT EXISTS irpf_rate    NUMERIC(5,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS irpf_amount  NUMERIC(12,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS apply_irpf   BOOLEAN DEFAULT false;
+
+-- ── 2. IRPF en invoices ──────────────────────────────────────
+ALTER TABLE public.invoices
+  ADD COLUMN IF NOT EXISTS irpf_rate    NUMERIC(5,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS irpf_amount  NUMERIC(12,2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS apply_irpf   BOOLEAN DEFAULT false;
+
+-- ── 3. IVA por línea en quote_items ─────────────────────────
+ALTER TABLE public.quote_items
+  ADD COLUMN IF NOT EXISTS tax_rate   NUMERIC(5,2) DEFAULT 21,
+  ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(12,2) DEFAULT 0;
+
+-- ── 4. IVA por línea en invoice_items ───────────────────────
+ALTER TABLE public.invoice_items
+  ADD COLUMN IF NOT EXISTS tax_rate   NUMERIC(5,2) DEFAULT 21,
+  ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(12,2) DEFAULT 0;
+
+-- ── 5. Serie de facturación en users ────────────────────────
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS invoice_series TEXT DEFAULT 'FAC',
+  ADD COLUMN IF NOT EXISTS quote_series   TEXT DEFAULT 'PRE';
+
+-- ── 6. TABLA: products (catálogo) ───────────────────────────
+CREATE TABLE IF NOT EXISTS public.products (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  description TEXT,
+  price       NUMERIC(12,2) NOT NULL DEFAULT 0,
+  tax_rate    NUMERIC(5,2)  NOT NULL DEFAULT 21,
+  unit        TEXT DEFAULT 'ud',   -- ud, h, mes, km, etc.
+  category    TEXT,
+  active      BOOLEAN DEFAULT true,
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "products_all_own" ON public.products
+  FOR ALL USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_products_user_id ON public.products(user_id);
+CREATE INDEX IF NOT EXISTS idx_products_active  ON public.products(active);
+
+-- ── 7. Recalcular totales (los existentes quedan a 0 de IRPF) ─
+UPDATE public.quotes SET irpf_rate = 0, irpf_amount = 0, apply_irpf = false WHERE irpf_rate IS NULL;
+UPDATE public.invoices SET irpf_rate = 0, irpf_amount = 0, apply_irpf = false WHERE irpf_rate IS NULL;
