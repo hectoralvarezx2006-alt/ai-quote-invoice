@@ -45,7 +45,13 @@ RESPONDE ÚNICAMENTE con un JSON válido con esta estructura exacta, sin texto a
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.5, maxOutputTokens: 1024 },
+          generationConfig: {
+  temperature: 0.5,
+  maxOutputTokens: 1024,
+  thinkingConfig: {
+    thinkingBudget: 0
+  }
+},
         }),
       }
     )
