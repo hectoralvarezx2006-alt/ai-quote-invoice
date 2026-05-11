@@ -34,7 +34,6 @@ export async function createQuote(
 ): Promise<Quote> {
   const supabase = createClient()
 
-  // Obtener user_id explícitamente
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) throw new Error('No autenticado')
 
@@ -50,6 +49,8 @@ export async function createQuote(
     ...item,
     quote_id: quote.id,
     subtotal: item.price * (item.quantity ?? 1),
+    tax_rate: item.tax_rate ?? 21,
+    tax_amount: item.price * (item.quantity ?? 1) * ((item.tax_rate ?? 21) / 100),
   }))
 
   const { error: itemsError } = await supabase
@@ -76,7 +77,6 @@ export async function updateQuote(
   if (quoteError) throw quoteError
 
   if (items !== undefined) {
-    // Eliminar items existentes y reinsertar
     await supabase.from('quote_items').delete().eq('quote_id', id)
 
     if (items.length > 0) {
@@ -84,6 +84,8 @@ export async function updateQuote(
         ...item,
         quote_id: id,
         subtotal: item.price * (item.quantity ?? 1),
+        tax_rate: item.tax_rate ?? 21,
+        tax_amount: item.price * (item.quantity ?? 1) * ((item.tax_rate ?? 21) / 100),
       }))
       const { error: itemsError } = await supabase
         .from('quote_items')
@@ -141,6 +143,8 @@ export function aiResponseToQuoteData(
     description: item.description,
     quantity: item.quantity ?? 1,
     price: item.price,
+    tax_rate: taxRate,
+    tax_amount: item.price * (item.quantity ?? 1) * (taxRate / 100),
     subtotal: item.price * (item.quantity ?? 1),
   }))
 

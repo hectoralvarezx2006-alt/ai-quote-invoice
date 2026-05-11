@@ -23,7 +23,7 @@ export async function sendQuoteToClient(
   const { error } = await resend.emails.send({
     from: FROM_EMAIL,
     to: quote.client_email!,
-    reply_to: replyTo,
+    replyTo: replyTo,
     subject: `Presupuesto: ${quote.title} — ${formatCurrency(quote.total)}`,
     html,
   })
