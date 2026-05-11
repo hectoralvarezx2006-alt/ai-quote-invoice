@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
-const MODEL = 'gemma-3-27b-it'
+const modelsToTry = ['gemini-2.5-flash']
 
 const SYSTEM_PROMPT = `Eres un experto en contabilidad española. Analiza esta imagen de ticket o factura y extrae los datos.
 

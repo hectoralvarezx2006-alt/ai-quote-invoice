@@ -2,7 +2,7 @@ import { AIQuoteResponse, GenerateQuoteParams } from '@/types'
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
 // Gemma 4 disponible en Google AI Studio free tier
-const MODEL = 'gemma-3-27b-it'  // fallback: 'gemini-2.0-flash'
+const MODEL = 'gemini-2.5-flash'  // fallback: 'gemini-2.0-flash'
 
 const SYSTEM_PROMPT = `Eres un experto en elaboración de presupuestos profesionales para freelancers y autónomos en España.
 Tu tarea es generar presupuestos detallados y profesionales basándote en la descripción del trabajo.

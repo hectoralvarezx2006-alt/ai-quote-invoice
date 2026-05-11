@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
-const MODEL = 'gemma-3-27b-it'
+const MODEL = 'gemini-2.5-flash'
 
 export async function POST(request: NextRequest) {
   try {
